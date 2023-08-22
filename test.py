@@ -55,10 +55,13 @@ if __name__ == "__main__":
     #torch.backends.cuda.enable_mem_efficient_sdp(False)
     for idx in range(test_num):
         print(f"test {idx} >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        bsz = random.randint(1, 64)
-        sql = random.randint(1, 4096)
+        bsz = random.randint(1, 32)
+        sql = random.randint(1, 1024)
         nh = random.choice([8, 12, 16])
         hd = random.choice([64, 128])
+        if bsz * sql * nh * hd >= 23*1024*1024: #3090 RAM size
+            print("too large")
+            continue
         dtype = random.choice([torch.float16, torch.bfloat16])
         #causal = random.choice([False, True])
         causal = True
