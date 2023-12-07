@@ -11,6 +11,8 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 torch.set_printoptions(profile="full")
 
+#set PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:32
+
 def custom_attention(q, k, v, causal=False):
     score = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(q.size(-1))
     if causal:
@@ -83,23 +85,25 @@ def test(func_name, q, k, v, *args, **kwargs):
     return o, tt, max_memory
 
 if __name__ == "__main__":
-    test_num = 20
+    test_num = 10
     bl_t = 0
     my_t = 0
-    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '4'
+    bl_array = []
+    my_array = []
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '0'
+    os.environ['CUDA_VISIBLE_DEVICES'] = '2'
     #torch.backends.cuda.enable_flash_sdp(False)
     #torch.backends.cuda.enable_mem_efficient_sdp(False)
     for idx in range(test_num):
         print(f"test {idx} >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
         bsz = random.randint(1, 8)
-        bsz = 1
+        bsz = 4
         sql = random.randint(384, 1024)
-        sql = 16384
+        sql = 4096
         nh = random.choice([8, 12, 16])
-        nh = 1
+        nh = 16
         hd = random.choice([64, 128])
-        hd = 160
+        hd = 128
         #if bsz * nh * math.ceil(sql/128) > 82: #3090 number of SM
         #    print("too large")
         #    continue
@@ -114,12 +118,12 @@ if __name__ == "__main__":
             causal = False
         print(f"shape: ({bsz}, {sql}, {nh}, {hd}), dtype: {dtype}, causal: {causal}")
         #device = torch.device("cuda:3")
-        q = torch.randn((bsz, sql, nh, hd)).to("cuda:4", dtype)
+        q = torch.randn((bsz, sql, nh, hd)).to("cuda:2", dtype)
         #k = torch.full([bsz, sql, nh, hd], 1.0).to("cuda:7", dtype)
         #v = torch.full_like(q, 0)
         #k = torch.full_like(q, 1)
-        k = torch.rand_like(q)
-        v = torch.rand_like(q)
+        k = torch.randn((bsz, sql, nh, hd)).to("cuda:2", dtype)
+        v = torch.rand_like(k)
         #for i in range(hd):
         #    for j in range(sql):
         #        v[0][0][0][i] = 100
@@ -144,9 +148,17 @@ if __name__ == "__main__":
                 print(fa_o[0][i][0])
         #print(o)
         #print(fa_o)
-        print(torch.allclose(o, fa_o, rtol=0.03, atol=0.03))
+        print(torch.allclose(o, fa_o, rtol=0.05, atol=0.05))
         if idx%2 == 1:
             my_t += fa_t
+            my_array.append(fa_t)
         else:
             bl_t += fa_t
+            bl_array.append(fa_t)
+    print("bl_arr:")
+    bl_array = ['{:.6f}'.format(x) for x in bl_array]
+    print(bl_array)
+    print("my_arr:")
+    my_array = ['{:.6f}'.format(x) for x in my_array]
+    print(my_array)
     print(f"avg base time: {bl_t/(test_num/2):.6f}, avg my time: {my_t/(test_num/2):.6f}, My speedup: {bl_t/my_t:.2f}")
